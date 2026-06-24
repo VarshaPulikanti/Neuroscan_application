@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.vscode/
+.env
+data/
+outputs/checkpoints/*
+!outputs/checkpoints/best_model.pth
+outputs/*.png
+.DS_Store
+.pytest_cache/
+*.pth
+!outputs/checkpoints/best_model.pth

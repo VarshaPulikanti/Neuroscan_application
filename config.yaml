@@ -1,0 +1,25 @@
+# NeuroScan — Brain MRI tumor classification
+dataset: brain_tumor_mri
+num_classes: 4
+class_names:
+  - glioma
+  - meningioma
+  - notumor
+  - pituitary
+
+image_size: 224
+model: efficientnet_b0  # options: efficientnet_b0, resnet18
+
+epochs: 15
+batch_size: 16
+learning_rate: 0.0003
+weight_decay: 0.0001
+patience: 5
+val_split: 0.15
+num_workers: 0
+
+data_dir: ./data/brain_tumor_mri
+train_dir: Training
+test_dir: Testing
+output_dir: ./outputs
+checkpoint_name: best_model.pth
