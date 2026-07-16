@@ -4,8 +4,8 @@ Set-Location $PSScriptRoot
 
 $Python = if (Test-Path "C:\Python313\python.exe") { "C:\Python313\python.exe" } else { "python" }
 
-Write-Host "Starting API on http://localhost:8000 ..."
-Start-Process -FilePath $Python -ArgumentList "-m", "uvicorn", "app.api:app", "--reload", "--port", "8000" -WorkingDirectory $PSScriptRoot
+Write-Host "Starting API on http://localhost:8080 ..."
+Start-Process -FilePath $Python -ArgumentList "-m", "uvicorn", "app.api:app", "--reload", "--port", "8080" -WorkingDirectory $PSScriptRoot
 
 Set-Location frontend
 if (-not (Test-Path "node_modules")) {

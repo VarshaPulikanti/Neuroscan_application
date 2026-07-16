@@ -14,14 +14,14 @@ switch ($Action) {
     "data"     { & $Python scripts/prepare_data.py @args }
     "train"    { & $Python train.py @args }
     "eval"     { & $Python evaluate.py @args }
-    "api"      { & $Python -m uvicorn app.api:app --reload --port 8000 }
+    "api"      { & $Python -m uvicorn app.api:app --reload --port 8080 }
     "frontend" { Set-Location frontend; npm run dev }
     "build"    { Set-Location frontend; npm install; npm run build; Set-Location .. }
     "web"      {
         Write-Host "Starting NeuroScan full-stack app..."
-        Write-Host "  API:      http://localhost:8000"
+        Write-Host "  API:      http://localhost:8080"
         Write-Host "  Frontend: http://localhost:5173"
-        Start-Process -FilePath $Python -ArgumentList "-m", "uvicorn", "app.api:app", "--reload", "--port", "8000" -WorkingDirectory $PSScriptRoot
+        Start-Process -FilePath $Python -ArgumentList "-m", "uvicorn", "app.api:app", "--reload", "--port", "8080" -WorkingDirectory $PSScriptRoot
         Set-Location frontend
         if (-not (Test-Path "node_modules")) { npm install }
         npm run dev

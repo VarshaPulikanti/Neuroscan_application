@@ -4,6 +4,9 @@ Brain MRI tumor classification project. I fine-tuned EfficientNet-B0 to classify
 
 I also built a small full-stack app around it: React frontend, FastAPI backend, user accounts, and scan history.
 
+**Live demo:** [https://neuroscan-application.vercel.app](https://neuroscan-application.vercel.app)  
+**API:** [https://neuroscan-application.onrender.com](https://neuroscan-application.onrender.com) · [docs](https://neuroscan-application.onrender.com/docs)
+
 **Dataset:** [Brain Tumor MRI (Kaggle)](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset)
 
 > For research / learning only — not for medical diagnosis.
@@ -33,7 +36,7 @@ Per-class F1: glioma 0.92 · meningioma 0.95 · no tumor 0.96 · pituitary 0.99
 | Explainability | Grad-CAM |
 | Backend | FastAPI + PyTorch |
 | Frontend | React + TypeScript (Vite) |
-| Auth / history | JWT + SQLite (local) / PostgreSQL (Render) |
+| Auth / history | JWT + SQLite |
 
 ---
 
@@ -48,9 +51,11 @@ Per-class F1: glioma 0.92 · meningioma 0.95 · no tumor 0.96 · pituitary 0.99
 ├── evaluate.py
 ├── predict.py
 ├── config.yaml
-├── render.yaml          # Render (API + Postgres)
+├── render.yaml          # Render free web service
+├── requirements.txt     # Full install (train + API)
+├── requirements-api.txt # Lean install for Render
 ├── start_web.ps1        # Run API + frontend locally
-└── requirements.txt
+└── start_web.bat
 ```
 
 ---
@@ -123,31 +128,32 @@ uvicorn app.api:app --host 0.0.0.0 --port 8080
 
 ## Deploy
 
-I deploy this as two services (both can be free for a student demo):
+I deploy this as two free services:
 
 | Part | Host | Notes |
 |------|------|--------|
-| Frontend | Vercel | Root directory: `frontend/` (free hobby) |
-| API | Render | Free web service + SQLite (see `render.yaml`) |
+| Frontend | [Vercel](https://neuroscan-application.vercel.app) | Root directory: `frontend/` |
+| API | [Render](https://neuroscan-application.onrender.com) | Free web service + SQLite |
 
 **Render (free)**
 
-1. New → **Web Service** (not a paid Blueprint DB)
-2. Connect `Neuroscan_application`, runtime Python
-3. Instance type: **Free**
-4. Build: `pip install -r requirements-api.txt` (lean install for free tier)
-5. Start: `uvicorn app.api:app --host 0.0.0.0 --port $PORT --workers 1`
-6. Env vars:
+1. New → **Web Service** (no paid database)
+2. Connect this GitHub repo, runtime Python, instance **Free**
+3. Build: `pip install -r requirements-api.txt`
+4. Start: `uvicorn app.api:app --host 0.0.0.0 --port $PORT --workers 1`
+5. Env vars:
    - `DATABASE_URL` = `sqlite:///./data/neuroscan.db`
    - `JWT_SECRET` = any long random string
    - `CHECKPOINT_PATH` = `outputs/checkpoints/best_model.pth`
-   - `CORS_ORIGINS` = your Vercel URL (add after frontend is live)
-7. Free instances sleep when idle — first request can be slow
+   - `CORS_ORIGINS` = your Vercel URL
+6. Free instances sleep when idle — first request can be slow  
+   Scan history may reset after restarts (ephemeral disk)
 
 **Vercel (free)**
 
 1. Import the repo, root = `frontend`
 2. Set `VITE_API_URL` to your Render API URL (no trailing slash)
+3. Redeploy after changing env vars
 
 Env examples: `.env.example`, `frontend/.env.example`
 
