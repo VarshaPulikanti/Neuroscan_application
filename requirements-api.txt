@@ -1,0 +1,17 @@
+# Lean deps for Render free tier (API + inference only)
+# Full training stack stays in requirements.txt
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+numpy
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-multipart>=0.0.9
+sqlalchemy>=2.0.0
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+email-validator>=2.0.0
+Pillow>=10.0.0
+PyYAML>=6.0
+opencv-python-headless>=4.8.0

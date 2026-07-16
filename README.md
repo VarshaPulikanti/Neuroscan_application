@@ -135,8 +135,8 @@ I deploy this as two services (both can be free for a student demo):
 1. New → **Web Service** (not a paid Blueprint DB)
 2. Connect `Neuroscan_application`, runtime Python
 3. Instance type: **Free**
-4. Build: `pip install -r requirements.txt`
-5. Start: `uvicorn app.api:app --host 0.0.0.0 --port $PORT`
+4. Build: `pip install -r requirements-api.txt` (lean install for free tier)
+5. Start: `uvicorn app.api:app --host 0.0.0.0 --port $PORT --workers 1`
 6. Env vars:
    - `DATABASE_URL` = `sqlite:///./data/neuroscan.db`
    - `JWT_SECRET` = any long random string

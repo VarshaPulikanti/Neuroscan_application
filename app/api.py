@@ -30,10 +30,13 @@ FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    try:
-        get_engine().load()
-    except RuntimeError:
-        pass
+    # Skip loading the model at boot on small hosts (e.g. Render free 512MB).
+    # Set LOAD_MODEL_ON_STARTUP=1 to warm-load when you have more RAM.
+    if os.getenv("LOAD_MODEL_ON_STARTUP", "0") == "1":
+        try:
+            get_engine().load()
+        except RuntimeError:
+            pass
     yield
 
 
@@ -87,6 +90,11 @@ def health():
 @app.get("/model/info", response_model=ModelInfoResponse)
 def model_info():
     engine = get_engine()
+    if not engine.is_loaded:
+        try:
+            engine.load()
+        except RuntimeError:
+            pass
     from src.inference import CLASS_LABELS
 
     return ModelInfoResponse(
@@ -107,10 +115,13 @@ async def predict(
 ):
     engine = get_engine()
     if not engine.is_loaded:
-        raise HTTPException(
-            status_code=503,
-            detail="Model not loaded. Train the model first with python train.py",
-        )
+        try:
+            engine.load()
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Train the model first with python train.py",
+            ) from exc
 
     if file.content_type not in {"image/png", "image/jpeg", "image/jpg"}:
         raise HTTPException(status_code=400, detail="Upload a PNG or JPEG image")

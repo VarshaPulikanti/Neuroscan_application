@@ -2,12 +2,9 @@
 
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import torch
 import torch.nn as nn
-from sklearn.metrics import classification_report, confusion_matrix
 
 from src.models.efficientnet import build_efficientnet_b0
 from src.models.resnet import build_resnet18
@@ -91,6 +88,8 @@ def evaluate_model(
 
 
 def plot_training_history(history: dict, output_path: Path) -> None:
+    import matplotlib.pyplot as plt
+
     epochs = range(1, len(history["train_loss"]) + 1)
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
@@ -119,6 +118,10 @@ def plot_confusion_matrix(
     output_path: Path,
     class_names: list[str],
 ) -> str:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from sklearn.metrics import classification_report, confusion_matrix
+
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(8, 6))
     sns.heatmap(
