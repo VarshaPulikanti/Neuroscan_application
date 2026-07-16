@@ -123,20 +123,28 @@ uvicorn app.api:app --host 0.0.0.0 --port 8080
 
 ## Deploy
 
-I deploy this as two services:
+I deploy this as two services (both can be free for a student demo):
 
 | Part | Host | Notes |
 |------|------|--------|
-| Frontend | Vercel | Root directory: `frontend/` |
-| API + DB | Render | Uses `render.yaml` (API + PostgreSQL) |
+| Frontend | Vercel | Root directory: `frontend/` (free hobby) |
+| API | Render | Free web service + SQLite (see `render.yaml`) |
 
-**Render**
+**Render (free)**
 
-1. Connect the GitHub repo (Blueprint / `render.yaml`)
-2. Set `CORS_ORIGINS` to your Vercel URL
-3. Make sure `outputs/checkpoints/best_model.pth` is available (or set `CHECKPOINT_PATH`)
+1. New → **Web Service** (not a paid Blueprint DB)
+2. Connect `Neuroscan_application`, runtime Python
+3. Instance type: **Free**
+4. Build: `pip install -r requirements.txt`
+5. Start: `uvicorn app.api:app --host 0.0.0.0 --port $PORT`
+6. Env vars:
+   - `DATABASE_URL` = `sqlite:///./data/neuroscan.db`
+   - `JWT_SECRET` = any long random string
+   - `CHECKPOINT_PATH` = `outputs/checkpoints/best_model.pth`
+   - `CORS_ORIGINS` = your Vercel URL (add after frontend is live)
+7. Free instances sleep when idle — first request can be slow
 
-**Vercel**
+**Vercel (free)**
 
 1. Import the repo, root = `frontend`
 2. Set `VITE_API_URL` to your Render API URL (no trailing slash)
