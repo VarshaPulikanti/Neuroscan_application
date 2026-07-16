@@ -1,101 +1,112 @@
 """FastAPI inference service for brain MRI classification."""
 
-import io
+import base64
+import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-import torch
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from PIL import Image
-from pydantic import BaseModel
-from torchvision import transforms
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import IMAGENET_MEAN, IMAGENET_STD, load_config
-from src.utils import build_model, get_device, load_checkpoint
+from app.auth import router as auth_router
+from app.deps import get_current_user_optional
+from app.scan_service import save_scan
+from app.scans import router as scans_router
+from app.schemas import ModelInfoResponse, PredictionResponse
+from src.db.database import get_db, init_db
+from src.db.models import User
+from src.inference import InferenceEngine, get_engine
 
-CLASS_LABELS = {
-    "glioma": "Glioma",
-    "meningioma": "Meningioma",
-    "notumor": "No Tumor",
-    "pituitary": "Pituitary Tumor",
-}
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
-config = load_config()
-device = get_device()
-checkpoint_path = (
-    PROJECT_ROOT / config["output_dir"] / "checkpoints" / config["checkpoint_name"]
-)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    try:
+        get_engine().load()
+    except RuntimeError:
+        pass
+    yield
+
 
 app = FastAPI(
     title="NeuroScan API",
     description="Brain MRI tumor classification inference API",
-    version="1.0.0",
+    version="3.0.0",
+    lifespan=lifespan,
 )
 
-_model = None
-_class_names: list[str] = []
-_model_name = ""
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173",
+        ).split(",")
+        if origin.strip()
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router)
+app.include_router(scans_router)
 
 
-class PredictionResponse(BaseModel):
-    prediction: str
-    prediction_label: str
-    confidence: float
-    probabilities: dict[str, float]
-
-
-def _get_transform():
-    image_size = config.get("image_size", 224)
-    return transforms.Compose(
-        [
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
-        ]
+def _result_to_response(result, gradcam_b64: str | None = None, scan_id: int | None = None):
+    return PredictionResponse(
+        prediction=result.prediction,
+        prediction_label=result.prediction_label,
+        confidence=result.confidence,
+        probabilities=result.probabilities,
+        gradcam_image=gradcam_b64,
+        scan_id=scan_id,
     )
-
-
-def _load_model():
-    global _model, _class_names, _model_name
-    if _model is not None:
-        return
-
-    if not checkpoint_path.exists():
-        raise RuntimeError(
-            f"Checkpoint not found: {checkpoint_path}. Train with: python train.py"
-        )
-
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    _model_name = checkpoint["config"].get("model", config["model"])
-    _class_names = checkpoint.get("class_names", config["class_names"])
-    _model = build_model(_model_name, config["num_classes"])
-    load_checkpoint(checkpoint_path, _model, device)
-    _model.eval()
-
-
-@app.on_event("startup")
-def startup() -> None:
-    try:
-        _load_model()
-    except RuntimeError:
-        pass
 
 
 @app.get("/health")
 def health():
+    engine = get_engine()
     return {
         "status": "ok",
-        "model_loaded": _model is not None,
-        "device": str(device),
+        "model_loaded": engine.is_loaded,
+        "device": str(engine.device),
     }
 
 
+@app.get("/model/info", response_model=ModelInfoResponse)
+def model_info():
+    engine = get_engine()
+    from src.inference import CLASS_LABELS
+
+    return ModelInfoResponse(
+        model_name=engine.model_name or "unknown",
+        class_names=engine.class_names,
+        class_labels=CLASS_LABELS,
+        model_loaded=engine.is_loaded,
+        device=str(engine.device),
+    )
+
+
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(file: UploadFile = File(...)):
-    if _model is None:
+async def predict(
+    file: UploadFile = File(...),
+    gradcam: bool = Query(False, description="Include Grad-CAM heatmap overlay"),
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    engine = get_engine()
+    if not engine.is_loaded:
         raise HTTPException(
             status_code=503,
             detail="Model not loaded. Train the model first with python train.py",
@@ -106,26 +117,46 @@ async def predict(file: UploadFile = File(...)):
 
     contents = await file.read()
     try:
-        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        image = InferenceEngine.bytes_to_image(contents)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid image file") from exc
 
-    transform = _get_transform()
-    tensor = transform(image).unsqueeze(0).to(device)
+    gradcam_b64 = None
+    if gradcam:
+        result, overlay = engine.predict_with_gradcam(image)
+        gradcam_b64 = base64.b64encode(
+            InferenceEngine.image_to_bytes(overlay)
+        ).decode("utf-8")
+    else:
+        result = engine.predict(image)
 
-    with torch.no_grad():
-        outputs = _model(tensor)
-        probabilities = torch.softmax(outputs, dim=1)[0]
+    scan_id = None
+    if user is not None:
+        scan = save_scan(
+            db,
+            user,
+            file.filename or "scan.jpg",
+            image,
+            result,
+            gradcam_b64,
+        )
+        scan_id = scan.id
 
-    top_idx = probabilities.argmax().item()
-    predicted = _class_names[top_idx]
+    return _result_to_response(result, gradcam_b64, scan_id)
 
-    return PredictionResponse(
-        prediction=predicted,
-        prediction_label=CLASS_LABELS.get(predicted, predicted),
-        confidence=round(probabilities[top_idx].item(), 4),
-        probabilities={
-            CLASS_LABELS.get(name, name): round(probabilities[i].item(), 4)
-            for i, name in enumerate(_class_names)
-        },
-    )
+
+if FRONTEND_DIST.exists():
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/")
+    async def serve_frontend():
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+    @app.get("/{path:path}")
+    async def serve_frontend_routes(path: str):
+        file_path = FRONTEND_DIST / path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(FRONTEND_DIST / "index.html")

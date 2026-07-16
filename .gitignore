@@ -1,15 +1,33 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
-.vscode/
-.env
-data/
-outputs/checkpoints/*
-!outputs/checkpoints/best_model.pth
-outputs/*.png
-.DS_Store
 .pytest_cache/
+
+# Env / IDE
+.env
+.vscode/
+.cursor/
+.DS_Store
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Local data & DB (dataset + SQLite) — not for the repo
+data/
+
+# Training plots
+outputs/*.png
+outputs/training_history.png
+outputs/confusion_matrix.png
+
+# Checkpoints: ignore all .pth, but keep best_model for inference
 *.pth
+!outputs/
+!outputs/checkpoints/
 !outputs/checkpoints/best_model.pth
+
+frontend/tsconfig.tsbuildinfo

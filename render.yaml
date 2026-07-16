@@ -1,0 +1,28 @@
+# Render Blueprint — NeuroScan API + PostgreSQL
+databases:
+  - name: neuroscan-db
+    plan: free
+    databaseName: neuroscan
+    user: neuroscan
+
+services:
+  - type: web
+    name: neuroscan-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: neuroscan-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CHECKPOINT_PATH
+        value: outputs/checkpoints/best_model.pth
